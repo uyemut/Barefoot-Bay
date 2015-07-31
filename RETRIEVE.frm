@@ -1,6 +1,6 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} RETRIEVE 
-   Caption         =   "BAREFOOT BAY RECREATION DISTRICT  -  BADGE CHECKER          .    .   .  version 0.030 (June 15th, 2015)"
+   Caption         =   "BAREFOOT BAY RECREATION DISTRICT  -  EZ BADGES  BFB BADGE CHECKER  .    .   .  version 0.33 (July 31th, 2015)"
    ClientHeight    =   8835
    ClientLeft      =   45
    ClientTop       =   435
@@ -18,7 +18,12 @@ Option Explicit
 Dim TomsDebugg, _
     wkTopWindowPos, _
     wkLeftWindowPos, _
-    wkExcelVersionUsed As Integer
+    wkExcelVersionUsed, _
+    wkNoteDays, _
+    wkAnnoyLimit, _
+    wkAnnoyCnt, _
+    wkNagFlag, _
+    wkRestrictedListDays  As Integer
     
 Dim retVal As Long
 Dim wkCloseFile  As Boolean
@@ -69,7 +74,8 @@ Private Sub butFind_Click()
 Dim iRow As Long, _
     iRowStart As Long, _
     iRowLastItem As Long, _
-    jRow As Long
+    jRow, _
+    wkDayDiff   As Long
     
 Dim Rng1 As Range, _
     Rng2 As Range, _
@@ -78,6 +84,7 @@ Dim Rng1 As Range, _
 
 Dim wkHardSearch As Boolean
 Dim wkDebugg As Boolean
+Dim wkFileDate As Date
 
 wkHardSearch = True
 If TomsDebugger > 8 Then
@@ -110,7 +117,7 @@ Range("W" & jRow) = Time()
 Range("X" & jRow) = GetUserName()
 Range("Y" & jRow) = GetMachineName()
 Range("Z" & jRow) = GetFirstNonLocalIPAddress()
-Application.StatusBar = "Fetching Resident Data for Account " & _
+Application.StatusBar = "Fetching Customer Notes Spreadsheet for Account " & _
                             Me.vbAcct
 '*********************************************************************
 'Open the FIRST target workbook
@@ -133,6 +140,10 @@ Else
     Set wb2 = ActiveWorkbook
     vFile2 = Me.vbAcctNoteFileName
 End If
+
+Application.StatusBar = "Processing Customer Notes Spreadsheet for Account " & _
+                            Me.vbAcct
+
 Set ws2 = wb2.Worksheets("Sheet1")
 Range("A1").Select
 
@@ -154,7 +165,28 @@ If Rng1 Is Nothing Then
     If wkCloseFile Then wb2.Close SaveChanges:=False
     Exit Sub
 End If
+Range("D" & Rng1.Row).Select
 
+'
+'    MsgBox " The modification date for this note file is " & FileDateTime(Me.vbAcctNoteFileName) & _
+'                  "."
+'
+wkFileDate = FileDateTime(Me.vbAcctNoteFileName)
+
+If wkNagFlag = 1 Then
+    wkDayDiff = DateDiff("d", wkFileDate, Date)
+    If wkDayDiff > wkNoteDays Then
+        If wkAnnoyCnt < wkAnnoyLimit Then
+            Call ShowNagMsgForDate("The Customer Notes file has not been updated in ", _
+                       " days. Please refresh using the 'Get Latest Notes' Button", _
+                                wkFileDate, True)
+        End If
+        wkAnnoyCnt = wkAnnoyCnt + 1
+    End If
+End If
+
+Application.StatusBar = "Building Checklist item for Customer Notes for Account " & _
+                            Me.vbAcct
 retVal = buildCheckList(2, True)
 iRow = Rng1.Row
 
@@ -171,6 +203,8 @@ Range("L" & jRow).Value = ws2.Range("D" & iRow).Value
 Range("M" & jRow & ":O" & jRow).Value = ws2.Range("E" & iRow & ":G" & iRow).Value
 
 If wkCloseFile Then wb2.Close SaveChanges:=False
+Application.StatusBar = "Fetching Resident Address Spreadsheet for Account " & _
+                            Me.vbAcct
 
 '******************************************************
 'Open the SECOND target workbook
@@ -188,7 +222,26 @@ Else
     Workbooks.Open Filename:=Me.vbAddrListFileName, ReadOnly:=True
     Set wb3 = ActiveWorkbook
 End If
+'
+'    MsgBox " The modification date for Resident file is " & FileDateTime(Me.vbAddrListFileName) & _
+'                  "."
+'
+wkFileDate = FileDateTime(Me.vbAddrListFileName)
 
+If wkNagFlag = 1 Then
+    wkDayDiff = DateDiff("d", wkFileDate, Date)
+    If wkDayDiff > wkRestrictedListDays Then
+        If wkAnnoyCnt < wkAnnoyLimit Then
+            Call ShowNagMsgForDate(" The Resident Address file has not been updated in ", _
+                 " days. Please inform mangagement and refresh using the 'Get Latest Notes' Button", _
+                                wkFileDate, True)
+        End If
+        wkAnnoyCnt = wkAnnoyCnt + 1
+    End If
+End If
+
+Application.StatusBar = "Processing Resident Address Spreadsheet for Account " & _
+                            Me.vbAcct
 Range("A1").Select
 Set ws3 = wb3.Worksheets("Sheet1")
 
@@ -224,12 +277,16 @@ Me.vbTaxIdCounty = Cells(iRow, 3).Value
 Me.vbTaxIdCountyPrev = Cells(iRow, 3).Value
 Me.vbAddress1.Value = Cells(iRow, 4).Value & " " & Cells(iRow, 5).Value
 Me.vbRow = iRow
+Application.StatusBar = "Building Checklist for the Resident Address for Account " & _
+                            Me.vbAcct
 retVal = buildCheckList(3, True)
 
 ws1.Activate
 Range("D" & jRow & ":H" & jRow).Value = ws3.Range("A" & iRow & ":E" & iRow).Value
 If wkCloseFile Then wb3.Close SaveChanges:=False
 
+Application.StatusBar = "Fetching Restricted List Spreadsheet for Account " & _
+                            Me.vbAcct
 '*****************************************************
 'Open the Restricted List workbook
 '*****************************************************
@@ -245,6 +302,27 @@ Else
     Workbooks.Open Filename:=vbRestrictedListFileName, ReadOnly:=True
     Set wb4 = ActiveWorkbook
 End If
+
+'
+'    MsgBox " The modification date for Restricted List file is " & FileDateTime(Me.vbRestrictedListFileName) & _
+'                  "."
+'
+wkFileDate = FileDateTime(Me.vbRestrictedListFileName)
+
+If wkNagFlag = 1 Then
+    wkDayDiff = DateDiff("d", wkFileDate, Date)
+    If wkDayDiff > wkRestrictedListDays Then
+        If wkAnnoyCnt < wkAnnoyLimit Then
+            Call ShowNagMsgForDate(" The Resident Address file has not been updated in ", _
+                 " days. Please inform mangagement and refresh using the 'Get Latest Notes' Button", _
+                                wkFileDate, True)
+        End If
+        wkAnnoyCnt = wkAnnoyCnt + 1
+    End If
+End If
+
+Application.StatusBar = "Processing Restricted List Spreadsheet for Account " & _
+                            Me.vbAcct
 Set ws4 = wb4.Worksheets("Sheet1")
 Range("A1").Select
 
@@ -259,6 +337,8 @@ If Err.Number <> 0 Then
    Exit Sub
 End If
 
+Application.StatusBar = "Building Checklist for Restricted List for Account " & _
+                            Me.vbAcct
 If Rng4 Is Nothing Then
 '    MsgBox " Account Not found on Restricted Listed Spreadsheet! Good, we may continue processing."
 '    ws1.Activate
@@ -434,6 +514,7 @@ End Sub
 Private Sub butQuit_Click()
     Application.Visible = True
     Unload Me
+    Application.Quit
 End Sub
 Private Sub butClear_Click()
     UserForm_Initialize
@@ -1051,7 +1132,7 @@ ClearForm3
 ClearForm2
 
 Set wb1 = ActiveWorkbook
-Set ws1 = wb1.Worksheets("BADGECHECKER")
+Set ws1 = wb1.Worksheets("EZBadges")
 Set ws9 = wb1.Worksheets("Configuration")
 
 Me.vbInfoBar = ""
@@ -1059,6 +1140,14 @@ Me.vbInfoBar = ""
 vFile1 = ws9.Range("B19").Value
 wkCloseFile = ws9.Range("B21")
 Windows(vFile1).Activate
+
+' Get nagging parameter defaults for Note files & Restricted List & Resident Address List
+'   These variables will produce a popup window after x amount of days if they do not
+'   update the note, resident address and restricted list lookup excel files.
+wkNoteDays = ws9.Range("B22")
+wkRestrictedListDays = ws9.Range("C22")
+wkAnnoyLimit = ws9.Range("D22")
+wkNagFlag = ws9.Range("E22")
 
 wsMasterURL = Trim(ws9.Range("A1").Value)
 wsMasterURLSuffix = Trim(ws9.Range("B1"))
@@ -1140,3 +1229,21 @@ Public Function TomsDebugger() As Integer
     TomsDebugger = TomsDebugg
 ' Level 0 means no debugging at all
 End Function
+
+Public Sub ShowNagMsgForDate(ByVal inMsg As Variant, _
+                             ByVal inMsg2 As Variant, _
+                    Optional ByVal inDate As Date = #1/1/1970#, _
+                    Optional showModDateForFileInSeperateMsgBox As Boolean = False)
+        MsgBox inMsg & _
+                     DateDiff("d", inDate, Date) & _
+                     inMsg2 & _
+                    vbCrLf & vbCrLf & "Thank You. "
+'
+        If showModDateForFileInSeperateMsgBox Then
+            MsgBox " The modification date for this file is " & _
+                     inDate & "."
+        End If
+'
+End Sub
+
+
